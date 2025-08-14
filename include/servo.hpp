@@ -4,7 +4,7 @@
 
 class Servo {
 public:
-    Servo() : gpio_pin_(255), slice_num_(0), top_(0), attached_(false), period_us_(20000.0f) {}
+    Servo() : pin(255), slice(0), top(0), attached(false), period(20000.0f) {}
 
     bool attach(uint gpio_pin, float freq_hz = 50.0f, float clkdiv = 64.0f);
     void detach();
@@ -14,13 +14,13 @@ public:
     void center();
 
 private:
-    uint gpio_pin_;
-    uint slice_num_;
-    uint32_t top_;
-    bool attached_;
-    float period_us_;
+    uint pin;
+    uint slice;
+    uint32_t top;
+    bool attached;
+    float period;
 
-    static constexpr uint16_t kMinUs = 500;   // MG996R safe range
-    static constexpr uint16_t kMaxUs = 2500;
+    static constexpr uint16_t min_us = 500;
+    static constexpr uint16_t max_us = 2500;
 };
 

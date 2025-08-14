@@ -22,7 +22,6 @@ target_link_libraries(Da_Vinci_controller
     hardware_adc
 )
 
-# USB stdio on, UART off (tweak if needed)
 pico_enable_stdio_usb(Da_Vinci_controller 1)
 pico_enable_stdio_uart(Da_Vinci_controller 0)
 
