@@ -1,56 +1,86 @@
-#include <cstdio>
 #include "pico/stdlib.h"
+#include "encoder.hpp"
 #include "servo.hpp"
-#include "pot.hpp"
+#include <stdio.h>
 
-static constexpr uint16_t min_raw = 10;
-static constexpr uint16_t max_raw = 4085;
-static constexpr uint16_t servo_min = 0;
-static constexpr uint16_t servo_max = 180;
-static constexpr bool invert_pot = false;
+// ---------------- Pins ----------------
+static const uint LED_PIN   = 25;
+static const uint ENC_A_PIN = 2;
+static const uint ENC_B_PIN = 3;
+static const uint SERVO_PIN = 0;
+
+// ---------------- Encoder / Servo state ----------------
+static volatile int32_t encoder_count = 0;
+static volatile bool encoder_updated = false;
+
+// Servo state
+static int servo_angle = 90;   // start centered
+
+// EC11 characteristics
+static constexpr int COUNTS_PER_DETENT = 4;   // typical EC11
+static constexpr int DEGREES_PER_DETENT = 2;  // tune this
+
+// Encoder ISR callback
+void encoder_cb(int32_t count) {
+    encoder_count = count;
+    encoder_updated = true;
+}
 
 int main() {
     stdio_init_all();
-    sleep_ms(300);
+    sleep_ms(2000);
 
-    PotConfig cfg;
-    cfg.pin = 26;
-    pot_init(cfg);
+    printf("\n=== EC11 → Servo Control ===\n");
 
-    const uint servo_pin = 15;
+    // LED heartbeat
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT);
+
+    // Encoder
+    Encoder encoder(ENC_A_PIN, ENC_B_PIN);
+    encoder.init();               // internal pull-ups enabled
+    encoder.setCallback(encoder_cb);
+
+    // Servo
     Servo servo;
-    servo.attach(servo_pin);
+    servo.attach(SERVO_PIN, 50, 64);  // 50 Hz, safe divider
+    servo.center();
 
-    const uint16_t raw_range = max_raw - min_raw;
-    const uint16_t deg_range = servo_max - servo_min;
-    if (raw_range == 0) {
-        printf("ERROR: max_raw must be > min_raw.\n");
-        while (true) tight_loop_contents();
-    }
+    printf("Servo attached and centered\n");
 
-    printf("Linear map raw %u..%u -> %u..%u deg (invert=%s)\n",
-           min_raw, max_raw, servo_min, servo_max, invert_pot ? "yes" : "no");
+    int32_t last_step = 0;
 
     while (true) {
-        uint16_t raw = pot_read_raw12();
-        uint16_t value = raw;
-        if (value < min_raw) value = min_raw;
-        if (value > max_raw) value = max_raw;
-        uint16_t delta = value - min_raw;
-        if (invert_pot) delta = raw_range - delta;
+        gpio_put(LED_PIN, 1);
+        sleep_ms(50);
+        gpio_put(LED_PIN, 0);
+        sleep_ms(50);
 
-        uint16_t angle = servo_min + ((uint32_t)delta * deg_range) / raw_range;
-        servo.writeAngle(angle);
+        if (encoder_updated) {
+            encoder_updated = false;
 
-        static uint32_t last_print = 0;
-        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
-        if (now_ms - last_print > 250) {
-            uint16_t percent = ((uint32_t)delta * 100) / raw_range;
-            printf("raw=%4u  angle=%3u (%3u%%)\n", raw, angle, percent);
-            last_print = now_ms;
+            // Convert raw counts → detents
+            int32_t step = encoder_count / COUNTS_PER_DETENT;
+
+            // Only act on step changes
+            if (step != last_step) {
+                int delta = step - last_step;
+                last_step = step;
+
+                servo_angle += delta * DEGREES_PER_DETENT;
+
+                // Clamp angle
+                if (servo_angle < 0)   servo_angle = 0;
+                if (servo_angle > 180) servo_angle = 180;
+
+                servo.writeAngle(servo_angle);
+
+                printf("Counts: %ld | Step: %ld | Angle: %d\n",
+                       encoder_count, step, servo_angle);
+            }
         }
 
-        sleep_us(1000);
+        tight_loop_contents();
     }
 }
 

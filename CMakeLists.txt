@@ -12,14 +12,17 @@ include_directories(include)
 
 add_executable(Da_Vinci_controller
     src/main.cpp
-    src/servo.cpp
     src/pot.cpp
+    src/servo.cpp
+    src/encoder.cpp
 )
 
 target_link_libraries(Da_Vinci_controller
     pico_stdlib
     hardware_pwm
     hardware_adc
+    hardware_gpio
+    hardware_irq
 )
 
 pico_enable_stdio_usb(Da_Vinci_controller 1)
